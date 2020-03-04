@@ -66,6 +66,7 @@ import java.text.DecimalFormat;
 import java.util.*;
 import java.util.Map.Entry;
 
+import static java.util.Arrays.stream;
 import static java.util.Collections.synchronizedList;
 import static org.ngrinder.common.util.CollectionUtils.*;
 import static org.ngrinder.common.util.ExceptionUtils.processException;
@@ -369,12 +370,12 @@ public class SingleConsole extends AbstractSingleConsole implements Listener, Sa
 	 * @param distFilesMd5 Required file's md5 for currently running test
 	 */
 	public void sendDistFilesMd5ToAgents(Set<String> distFilesMd5) {
-		for (ProcessReports processReport : processReports) {
-			getConsoleComponent(ConsoleCommunicationImplementationEx.class)
+		stream(processReports)
+			.parallel()
+			.forEach(processReport -> getConsoleComponent(ConsoleCommunicationImplementationEx.class)
 				.sendToAddressedAgents(
 					new AgentAddress(processReport.getAgentProcessReport().getAgentIdentity()),
-					new RefreshCacheMessage(distFilesMd5));
-		}
+					new RefreshCacheMessage(distFilesMd5)));
 		LOGGER.info("Send md5 of distribution files to agent.");
 	}
 
