@@ -1,4 +1,4 @@
-/* 
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
  *  You may obtain a copy of the License at
@@ -9,7 +9,7 @@
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
- * limitations under the License. 
+ * limitations under the License.
  */
 package org.ngrinder.perftest.service;
 
@@ -23,6 +23,7 @@ import net.grinder.console.model.ConsoleProperties;
 import net.grinder.util.ListenerHelper;
 import net.grinder.util.ListenerSupport;
 import net.grinder.util.UnitUtils;
+import org.apache.commons.io.FileDeleteStrategy;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang.time.DateUtils;
 import org.ngrinder.agent.service.AgentService;
@@ -59,6 +60,7 @@ import static org.ngrinder.common.constant.CacheConstants.DIST_MAP_NAME_MONITORI
 import static org.ngrinder.common.constant.CacheConstants.DIST_MAP_NAME_SAMPLING;
 import static org.ngrinder.common.constant.ClusterConstants.PROP_CLUSTER_SAFE_DIST;
 import static org.ngrinder.common.util.AccessUtils.getSafe;
+import static org.ngrinder.common.util.ThreadUtils.sleep;
 import static org.ngrinder.model.Status.*;
 
 /**
@@ -235,6 +237,9 @@ public class PerfTestRunnable implements ControllerConstants {
 			.stream()
 			.filter(file -> isCachedFile(cachedDistFilesMd5, file))
 			.forEach(FileUtils::deleteQuietly);
+
+
+		// TODO 삭제를 하지 말고 filtering 해서 보내자.... filtering 을 하면 distribution file 크기는 어떻게 측정하지.. ㅠ
 	}
 
 	private boolean isCachedFile(Set<String> cachedDistFilesMd5, File file) {
@@ -260,6 +265,7 @@ public class PerfTestRunnable implements ControllerConstants {
 				.stream()
 				.allMatch(agentCachedDistFilesMd5 -> agentCachedDistFilesMd5.contains(distFileMd5)))
 			.collect(toSet());
+
 	}
 
 	private void prepareFileDistribution(PerfTest perfTest, SingleConsole singleConsole) throws IOException {
@@ -309,6 +315,7 @@ public class PerfTestRunnable implements ControllerConstants {
 	 */
 	void distributeFileOn(final PerfTest perfTest, SingleConsole singleConsole) throws IOException {
 		prepareFileDistribution(perfTest, singleConsole);
+
 		// Distribute files
 		perfTestService.markStatusAndProgress(perfTest, DISTRIBUTE_FILES, "All necessary files are being distributed.");
 

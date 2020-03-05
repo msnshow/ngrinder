@@ -50,6 +50,8 @@ public class FileUtils {
 	}
 
 	public static String getMd5(File file) throws IOException {
-		return md5Hex(new FileInputStream(file));
+		try (FileInputStream fileInputStream = new FileInputStream(file)) {
+			return md5Hex(fileInputStream);
+		}
 	}
 }
