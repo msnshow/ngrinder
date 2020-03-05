@@ -49,8 +49,10 @@ import javax.annotation.PostConstruct;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.stream.Stream;
 
+import static java.util.Collections.emptySet;
 import static java.util.Objects.requireNonNull;
 import static java.util.stream.Collectors.toList;
 import static java.util.stream.Collectors.toSet;
@@ -63,7 +65,6 @@ import static org.ngrinder.common.constant.CacheConstants.*;
 import static org.ngrinder.common.constant.ControllerConstants.PROP_CONTROLLER_ENABLE_AGENT_AUTO_APPROVAL;
 import static org.ngrinder.common.util.CollectionUtils.newHashMap;
 import static org.ngrinder.common.util.TypeConvertUtils.cast;
-import static org.ngrinder.infra.config.Config.NONE_REGION;
 
 /**
  * Agent manager service.
@@ -311,6 +312,9 @@ public class AgentService extends AbstractAgentService implements TopicListener<
 									  final GrinderProperties grinderProperties, final Integer agentCount) {
 		final Set<AgentInfo> allFreeAgents = getAllAttachedFreeApprovedAgentsForUser(user.getUserId());
 		final Set<AgentInfo> necessaryAgents = selectAgent(user, allFreeAgents, agentCount);
+
+		hazelcastService.put(CACHE_RECENTLY_USED_AGENTS, user.getUserId(), necessaryAgents);
+
 		LOGGER.info("{} agents are starting for user {}", agentCount, user.getUserId());
 		for (AgentInfo agentInfo : necessaryAgents) {
 			LOGGER.info("- Agent {}", agentInfo.getName());
@@ -321,15 +325,45 @@ public class AgentService extends AbstractAgentService implements TopicListener<
 	/**
 	 * Select agent. This method return agent set which is belong to the given user first and then share agent set.
 	 *
+	 * Priority of agent selection.
+	 * 1. owned agent of recently used.
+	 * 2. owned agent.
+	 * 3. public agent of recently used.
+	 * 4. public agent.
+	 *
 	 * @param user          user
-	 * @param allFreeAgents agents
-	 * @param agentCount    number of agent
-	 * @return selected agent.
+	 * @param allFreeAgents available agents
+	 * @param agentCount    number of agents
+	 * @return selected agents.
 	 */
-	private Set<AgentInfo> selectAgent(User user, Set<AgentInfo> allFreeAgents, int agentCount) {
-		Stream<AgentInfo> ownedFreeAgentStream = allFreeAgents.stream().filter(agentInfo -> isOwnedAgent(agentInfo, user.getUserId()));
-		Stream<AgentInfo> freeAgentStream = allFreeAgents.stream().filter(this::isCommonAgent);
+	Set<AgentInfo> selectAgent(User user, Set<AgentInfo> allFreeAgents, int agentCount) {
+		Set<AgentInfo> recentlyUsedAgents = hazelcastService.getOrDefault(CACHE_RECENTLY_USED_AGENTS, user.getUserId(), emptySet());
+
+		Stream<AgentInfo> ownedFreeAgentStream = getFreeAgentStream(recentlyUsedAgents,
+			allFreeAgents, agentInfo -> isOwnedAgent(agentInfo, user.getUserId()));
+
+		Stream<AgentInfo> freeAgentStream = getFreeAgentStream(recentlyUsedAgents,
+			allFreeAgents, this::isCommonAgent);
+
 		return concat(ownedFreeAgentStream, freeAgentStream).limit(agentCount).collect(toSet());
+	}
+
+	/**
+	 * @return filtered and sorted agents ordered by recently used first.
+	 * */
+	<T> Stream<T> getFreeAgentStream(final Set<T> recentlyUsedAgents, Set<T> allFreeAgents, Predicate<? super T> predicate) {
+		return allFreeAgents
+			.stream()
+			.filter(predicate)
+			.sorted((agent1, agent2) -> {
+				if (recentlyUsedAgents.contains(agent1)) {
+					return -1;
+				}
+				if (recentlyUsedAgents.contains(agent2)) {
+					return 1;
+				}
+				return 0;
+			});
 	}
 
 	/**
